@@ -1,5 +1,6 @@
 package com.xfinity.blueprint_compiler
 
+import com.squareup.kotlinpoet.AnnotationSpec
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.INT
@@ -11,7 +12,6 @@ import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.WildcardTypeName
-import com.sun.tools.javac.util.Pair
 import java.util.ArrayList
 import java.util.Locale
 
@@ -27,8 +27,8 @@ class CodeGenerator(private val appPackageName: String,
         componentViewWhenStatements.add("return when(viewType) {\n")
         defaultPresenterWhenStatements.add("return when(viewType) {\n")
 
-        val componentViewType = ClassName("com.xfinity.blueprint.view", "ComponentView").parameterizedBy(
-                ClassName("kotlin","Nothing")).copy(true)
+        val starProjection = WildcardTypeName.producerOf(ClassName("kotlin", "Any").copy(true))
+        val componentViewType: TypeName = ClassName("com.xfinity.blueprint.view", "ComponentView").plusParameter(starProjection)
 
         val nullableComponentPresenterType =
                 ClassName("com.xfinity.blueprint.presenter", "ComponentPresenter")
@@ -38,8 +38,11 @@ class CodeGenerator(private val appPackageName: String,
         val getDefaultPresenterMethodbuilder1 = FunSpec.builder("getDefaultPresenter")
                 .addModifiers(KModifier.PUBLIC)
                 .addModifiers(KModifier.OVERRIDE)
-                .addParameter("componentView", ClassName("com.xfinity.blueprint.view", "ComponentView"))
+                .addParameter("componentView", componentViewType)
                 .addParameter("args", Object::class, KModifier.VARARG)
+                .addAnnotation(AnnotationSpec.builder(Suppress::class)
+                    .addMember("%S", "UNCHECKED_CAST")
+                    .build())
                 .returns(nullableComponentPresenterType)
 
         val getDefaultPresenterMethodbuilder2 = FunSpec.builder("getDefaultPresenter")
@@ -47,9 +50,12 @@ class CodeGenerator(private val appPackageName: String,
                 .addModifiers(KModifier.OVERRIDE)
                 .addParameter("viewType", INT)
                 .addParameter("args", Object::class, KModifier.VARARG)
+                .addAnnotation(AnnotationSpec.builder(Suppress::class)
+                    .addMember("%S", "UNCHECKED_CAST")
+                    .build())
                 .returns(nullableComponentPresenterType)
 
-        getDefaultPresenterMethodbuilder1.addCode("return when {\n")
+        getDefaultPresenterMethodbuilder1.addCode("return when(componentView) {\n")
 
         val contructorArgs: MutableList<Pair<TypeName, String>> = ArrayList()
         componentViewInfoList?.let {
@@ -59,9 +65,9 @@ class CodeGenerator(private val appPackageName: String,
                         .initializer("$appPackageName.R.layout.${componentViewInfo.viewType}").build()
                 companionProperties.add(propertySpec)
 
-                componentViewWhenStatements.add("$viewTypeFieldName -> ${componentViewInfo.componentView}()\n")
+                componentViewWhenStatements.add("$viewTypeFieldName -> ${componentViewInfo.componentView}() \n as? ComponentView<RecyclerView.ViewHolder>\n")
                 if (componentViewInfo.defaultPresenter != null) {
-                    getDefaultPresenterMethodbuilder1.addCode("componentView is ${componentViewInfo.componentView} ->".trimIndent())
+                    getDefaultPresenterMethodbuilder1.addCode("is ${componentViewInfo.componentView} ->".trimIndent())
                     var returnStatement: String
                     val defaultPresenterConstructorArgs =
                             if (defaultPresenterConstructorMap != null && componentViewInfo.defaultPresenter != null) {
@@ -76,7 +82,7 @@ class CodeGenerator(private val appPackageName: String,
                         val statementBuilder = StringBuilder("${componentViewInfo.defaultPresenter}(")
                         for (j in defaultPresenterConstructorArgs.indices) {
                             val argPair = defaultPresenterConstructorArgs[j]
-                            val argName = argPair.snd //arg name
+                            val argName = argPair.second //arg name
                             statementBuilder.append(argName)
                             if (j < defaultPresenterConstructorArgs.size - 1) {
                                 statementBuilder.append(", ")
@@ -92,7 +98,7 @@ class CodeGenerator(private val appPackageName: String,
                         }
                         statementBuilder.toString()
                     }
-                    getDefaultPresenterMethodbuilder1.addStatement(returnStatement)
+                    getDefaultPresenterMethodbuilder1.addStatement("$returnStatement as? ComponentPresenter<ComponentView<*>, ComponentModel>?")
 //                    getDefaultPresenterMethodbuilder1.addCode("}\n")
                     defaultPresenterWhenStatements.add("$viewTypeFieldName -> \n")
                     defaultPresenterWhenStatements.add("$returnStatement\n")
@@ -114,6 +120,9 @@ class CodeGenerator(private val appPackageName: String,
                 .addModifiers(KModifier.PUBLIC)
                 .addModifiers(KModifier.OVERRIDE)
                 .addParameter("viewType", INT)
+                .addAnnotation(AnnotationSpec.builder(Suppress::class)
+                    .addMember("%S", "UNCHECKED_CAST")
+                    .build())
                 .returns(nullableComponentViewType)
 
         for (statement in componentViewWhenStatements) {
@@ -133,11 +142,11 @@ class CodeGenerator(private val appPackageName: String,
 
         val componentRegistryConstructorBuilder = FunSpec.constructorBuilder()
         contructorArgs.sortWith(Comparator() { pair: Pair<TypeName, String>, pair1: Pair<TypeName, String> ->
-            pair.fst.toString().compareTo(pair1.fst.toString(), ignoreCase = true)
+            pair.first.toString().compareTo(pair1.first.toString(), ignoreCase = true)
         })
         for (argPair in contructorArgs) {
-            properties.add(PropertySpec.builder(argPair.snd, argPair.fst, KModifier.PRIVATE).initializer(argPair.snd).build())
-            componentRegistryConstructorBuilder.addParameter(ParameterSpec.builder(argPair.snd, argPair.fst).build())
+            properties.add(PropertySpec.builder(argPair.second, argPair.first, KModifier.PRIVATE).initializer(argPair.second).build())
+            componentRegistryConstructorBuilder.addParameter(ParameterSpec.builder(argPair.second, argPair.first).build())
         }
 
         val classBuilder = TypeSpec.classBuilder("AppComponentRegistry")

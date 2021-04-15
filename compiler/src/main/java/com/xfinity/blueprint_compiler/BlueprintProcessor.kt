@@ -18,7 +18,6 @@ import com.sun.tools.javac.code.Symbol.ClassSymbol
 import com.sun.tools.javac.code.Symbol.MethodSymbol
 import com.sun.tools.javac.code.Symbol.VarSymbol
 import com.sun.tools.javac.code.Type
-import com.sun.tools.javac.util.Pair
 import com.xfinity.blueprint_annotations.ClickableComponentBinder
 import com.xfinity.blueprint_annotations.ComponentViewClass
 import com.xfinity.blueprint_annotations.ComponentViewHolder
@@ -254,7 +253,7 @@ class BlueprintProcessor : AbstractProcessor() {
 
         val viewDelegates = codeGenerator.generateViewBaseClasses()
         for (viewDelegate in viewDelegates) {
-            val viewDelegateKotlinFile = FileSpec.builder(viewDelegate.fst, viewDelegate.snd.name!!).addType(viewDelegate.snd).build()
+            val viewDelegateKotlinFile = FileSpec.builder(viewDelegate.first, viewDelegate.second.name!!).addType(viewDelegate.second).build()
             viewDelegateKotlinFile.writeTo(processingEnv.filer)
         }
     }
