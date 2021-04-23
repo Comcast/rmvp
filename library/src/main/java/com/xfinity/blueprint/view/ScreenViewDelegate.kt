@@ -85,6 +85,10 @@ open class ScreenViewDelegate(componentRegistry: ComponentRegistry,
         loadingView?.visibility = View.GONE
     }
 
+    override fun updateCacheSize(size: Int) {
+        recyclerView.setItemViewCacheSize(size)
+    }
+
     /**
      * updateComponents uses DiffUtil and a DefaultComponentDiffCallback in order to allow a screen to be
      * updated with new, removed, or changed components without needing a presenter to maintain the state
